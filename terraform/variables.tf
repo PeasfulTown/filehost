@@ -15,3 +15,9 @@ variable "github_branch" {
   default     = "main"
   description = "The branch that triggers the pipeline."
 }
+
+variable "github_connection_name" {
+  type = string
+  default = "peasfultown-gh-connection"
+  description = "Name of the AWS CodeConnection"
+}

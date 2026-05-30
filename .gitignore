@@ -1,1 +1,5 @@
 **/*.venv
+**/*.terraform
+**/*.terraform.lock.hcl
+**/*extractor.zip
+**/*config.tfvars

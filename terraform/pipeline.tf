@@ -1,5 +1,5 @@
 resource "aws_codeconnections_connection" "github" {
-  name          = "github-connection"
+  name          = var.github_connection_name
   provider_type = "GitHub"
 }
 
