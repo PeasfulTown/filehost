@@ -1,12 +1,17 @@
 resource "aws_codeconnections_connection" "github" {
-  name = "github-connection"
+  name          = "github-connection"
   provider_type = "GitHub"
 }
 
 # --- S3 Bucket to Store Pipeline Artifacts ---
 resource "aws_s3_bucket" "filehost_pipeline_bucket" {
-  bucket_prefix = "filehost-artifact"
-  force_destroy = true
+  bucket    = format(
+    "filehost-pipeline-artifacts-%s-%s-an",
+    data.aws_caller_identity.current.account_id,
+    data.aws_region.current.region
+  )
+  bucket_namespace = "account-regional"
+  force_destroy    = true
 }
 
 # --- IAM Role for CodePipeline ---
@@ -34,7 +39,7 @@ resource "aws_iam_role_policy" "filehost_codepipeline_policy" {
       {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:GetObjectVersion", "s3:GetBucketVersioning", "s3:PutObjectAcl", "s3:PutObject"]
-        Resource = ["${aws_s3_bucket.filehost_pipeline_bucket.arn}", "${aws_s3_bucket.pipeline_bucket.arn}/*"]
+        Resource = ["${aws_s3_bucket.filehost_pipeline_bucket.arn}", "${aws_s3_bucket.filehost_pipeline_bucket.arn}/*"]
       },
       {
         Effect   = "Allow"
@@ -42,9 +47,9 @@ resource "aws_iam_role_policy" "filehost_codepipeline_policy" {
         Resource = "*"
       },
       {
-        Effect = "Allow"
-        Action = ["codestar-connections:UseConnection"]
-        Resource = [aws_codeconnections_connections.github.arn]
+        Effect   = "Allow"
+        Action   = ["codestar-connections:UseConnection"]
+        Resource = [aws_codeconnections_connection.github.arn]
       }
     ]
   })
@@ -150,9 +155,9 @@ resource "aws_codepipeline" "pipeline" {
       output_artifacts = ["source_output"]
 
       configuration = {
-        ConnectionArn = aws_codeconnections_connection.github.arn
+        ConnectionArn    = aws_codeconnections_connection.github.arn
         FullRepositoryId = var.github_repo
-        BranchName = "main"
+        BranchName       = "main"
       }
     }
   }

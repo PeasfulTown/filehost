@@ -12,8 +12,13 @@ resource "aws_dynamodb_table" "filehost_metadata_table" {
 
 # 2. Create S3 Bucket where files are uploaded
 resource "aws_s3_bucket" "filehost_upload_bucket" {
-  bucket        = "my-unique-user-uploads-bucket-2026" # Make sure this name is completely unique globally
-  force_destroy = true
+  bucket    = format(
+    "filehost-uploads-%s-%s-an",
+    data.aws_caller_identity.current.account_id,
+    data.aws_region.current.region
+  )
+  bucket_namespace = "account-regional"
+  force_destroy    = true
 }
 
 # 3. Create IAM execution Role for the Lambda Function

@@ -6,7 +6,7 @@ variable "aws_region" {
 
 variable "github_repo" {
   type        = string
-  default     = "YOUR_GITHUB_USERNAME/YOUR_REPO_NAME" # CHANGE THIS to match your repo
+  default     = "PeasfulTown/filehost" # CHANGE THIS to match your repo
   description = "The full repository path on GitHub."
 }
 
