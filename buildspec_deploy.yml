@@ -5,7 +5,7 @@ phases:
     commands:
       - echo "Downloading official Terraform binary..."
       # Added -f (fail silently on server errors) and -L (follow redirects)
-      - curl -f -L -s -q https://releases.hashicorp.com/terraform/1.7.0/terraform_1.7.0_linux_amd64.zip -o /tmp/terraform.zip
+      - curl -f -L -s -q https://releases.hashicorp.com/terraform/1.15.0/terraform_1.15.0_linux_amd64.zip -o /tmp/terraform.zip
 
       - echo "Extracting binary..."
       - unzip -o -q /tmp/terraform.zip -d /tmp/
@@ -18,9 +18,12 @@ phases:
 
       - echo "Verifying installation..."
       - terraform --version
+
   build:
     commands:
       - echo "Synchronizing infrastructure state..."
+      - echo "bucket = \"$BACKEND_BUCKET_NAME\"" > terraform/backend-config.tfvars
+
       - cd terraform
-      - terraform init
+      - terraform init -backend-config=backend-config.tfvars
       - terraform apply -auto-approve
