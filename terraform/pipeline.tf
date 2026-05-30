@@ -124,12 +124,18 @@ resource "aws_codebuild_project" "deploy_project" {
     image                       = "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
     type                        = "LINUX_CONTAINER"
     image_pull_credentials_type = "CODEBUILD"
+
+    environment_variable {
+      name = "BACKEND_BUCKET_NAME"
+      value = "terraform-state-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}-an"
+    }
   }
 
   source {
     type      = "CODEPIPELINE"
     buildspec = "buildspec_deploy.yml"
   }
+
 }
 
 # --- The CodePipeline Definition ---
