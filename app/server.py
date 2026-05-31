@@ -1,27 +1,36 @@
 import os
 import boto3
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from mangum import Mangum
 
-app = Flask(__name__)
-s3_client = boto3.client('s3')
+app = FastAPI(title="FileHost Controller")
 
-BUCKET_NAME = os.environ.get("UPLOAD_BUCKET_NAME")
+s3_client = boto3.client("s3")
+BUCKET_NAME: str = os.environ["UPLOAD_BUCKET_NAME"]
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+@app.get("/health")
+def check_health():
+    # TODO: implement actual health check endpoint
+    return {"status": "healthy"}
 
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
     try:
-        # Stream the file directly to S3
-        s3_client.upload_fileobj(file, BUCKET_NAME, file.filename)
-        return jsonify({"message": f"Successfully uploaded {file.filename} to S3"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        contents = await file.read()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+        s3_client.put_object(
+            Bucket=BUCKET_NAME, Key=f"uploads/{file.filename}", Body=contents
+        )
+        return {"message": "Success", "filename": file.filename}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"S3 storage error: {str(e)}")
+
+
+handler = Mangum(app, lifespan="off")
+
+if __name__ == "__main__":
+    import uvicorn
+    print("Starting local development server...")
+    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
