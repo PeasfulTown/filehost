@@ -5,12 +5,11 @@ import os
 from datetime import datetime
 
 s3 = boto3.client("s3")
-dynamodb = boto3.client("dynamodb")
+dynamodb = boto3.resource("dynamodb")
 
 # The exact table name will be supplied dynamically by Terraform
 TABLE_NAME = os.environ.get("TABLE_NAME", "FileMetadata")
 table = dynamodb.Table(TABLE_NAME)
-
 
 def lambda_handler(event, context):
     # 1. Parse the bucket name and file name from the incoming S3 event payload
