@@ -4,6 +4,7 @@ terraform {
   backend "s3" {
     key    = "filehost/terraform.tfstate"
     region = "us-east-1"
+    dynamodb_table = "global-terraform-lock"
   }
 
   required_providers {

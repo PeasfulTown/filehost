@@ -25,5 +25,5 @@ phases:
       - echo "bucket = \"$BACKEND_BUCKET_NAME\"" > terraform/backend-config.tfvars
 
       - cd terraform
-      - terraform init -backend-config=backend-config.tfvars
+      - terraform init -input=false -backend-config=backend-config.tfvars
       - terraform apply -auto-approve
