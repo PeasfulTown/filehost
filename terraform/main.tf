@@ -8,11 +8,18 @@ resource "aws_dynamodb_table" "filehost_metadata_table" {
     name = "FileName"
     type = "S"
   }
+
+  # Block for financial protection: Circuit breaker which will throttle table if
+  # an infinite loop tries to spike the requests
+  on_demand_throughput {
+    max_read_request_units  = 4
+    max_write_request_units = 4
+  }
 }
 
 # 2. Create S3 Bucket where files are uploaded
 resource "aws_s3_bucket" "filehost_upload_bucket" {
-  bucket    = format(
+  bucket = format(
     "filehost-uploads-%s-%s-an",
     data.aws_caller_identity.current.account_id,
     data.aws_region.current.region
