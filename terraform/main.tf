@@ -174,7 +174,7 @@ resource "null_resource" "filehost_build_lambda_package" {
   }
 }
 
-resource "archive_file" "filehost_server_lambda_zip" {
+data "archive_file" "filehost_server_lambda_zip" {
   type = "zip"
   source_dir = "${path.module}/../app/lambda_dist"
   output_path = "${path.module}/../app/lambda_deployment.zip"
@@ -183,12 +183,12 @@ resource "archive_file" "filehost_server_lambda_zip" {
 }
 
 resource "aws_lambda_function" "filehost_server_lambda" {
-  filename = archive_file.filehost_server_lambda_zip.output_path
+  filename = data.archive_file.filehost_server_lambda_zip.output_path
   function_name = "filehost-server-lambda"
   role = aws_iam_role.filehost_server_lambda_role.arn
   handler = "server.handler"
   runtime = "python3.12"
-  source_code_hash = archive_file.filehost_server_lambda_zip.output_base64sha256
+  source_code_hash = data.archive_file.filehost_server_lambda_zip.output_base64sha256
 
   environment {
     variables = {
