@@ -150,29 +150,6 @@ resource "aws_codepipeline" "pipeline" {
     type     = "S3"
   }
 
-  # Triggers on pull requests
-  trigger {
-    provider_type = "CodeStarSourceConnection"
-
-    git_configuration {
-      source_action_name = "SourceAction"
-
-      pull_request {
-        events = ["OPEN", "UPDATED"]
-
-        branches {
-          includes = ["main"]
-        }
-      }
-
-      push {
-        branches {
-          includes = ["main"]
-        }
-      }
-    }
-  }
-
   # STAGE 1: Source (linked to GitHub repository)
   stage {
     name = "Source"
@@ -215,28 +192,6 @@ resource "aws_codepipeline" "pipeline" {
   # STAGE 3: CD (Terraform Apply)
   stage {
     name = "Deploy"
-
-    # Don't run the deploy stage if pipeline was triggered by Pull Request event
-    before_entry {
-      condition {
-        result = "SKIP"
-        rule {
-          name = "SkipOnPullRequest"
-          rule_type_id {
-            category = "Rule"
-            provider = "VariableCheck"
-            owner = "AWS"
-            version = "1"
-          }
-          configuration = {
-            Variable = "#{SourceVariables.PullRequestId}"
-            Value = "[0-9]+"
-            Operator = "MATCHES"
-          }
-        }
-      }
-
-    }
 
     action {
       name            = "TerraformApply"
