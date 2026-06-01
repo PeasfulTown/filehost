@@ -52,7 +52,7 @@ resource "aws_iam_role_policy" "filehost_extractor_lambda_policy" {
       {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:HeadObject"]
-        Resource = "${aws_s3_bucket.filehost_upload_bucket.arn}/uploads"
+        Resource = "${aws_s3_bucket.filehost_upload_bucket.arn}/uploads/*"
       },
       {
         Effect   = "Allow"
