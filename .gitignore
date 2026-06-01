@@ -1,5 +1,6 @@
 **/*.venv
 **/*.terraform
 **/*.terraform.lock.hcl
-**/*extractor.zip
+**/*.zip
 **/*config.tfvars
+**/*__pycache__
