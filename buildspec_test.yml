@@ -5,14 +5,13 @@ phases:
     runtime-versions:
       python: 3.12
     commands:
-      - echo Installing Python dependencies...
+      - echo "Installing Python dependencies..."
       - pip install -r app/requirements.txt
-      - pip install pytest pytest-mock
     build:
       commands:
-        - echo Running unit tests...
+        - echo "Running unit tests..."
         - pytest app/
     post_build:
       commandss:
-        - echo Tests completed successfully!
+        - echo "Tests completed successfully!"
 

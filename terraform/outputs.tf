@@ -12,3 +12,8 @@ output "codeconnections_connection_arn" {
   value       = aws_codeconnections_connection.github.arn
   description = "The ARN of the GitHub connection bridge."
 }
+
+output "apigateway_url" {
+  value = aws_apigatewayv2_stage.filehost_default_stage.invoke_url
+  description = "Live public HTTP URL of the application"
+}

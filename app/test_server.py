@@ -1,28 +1,80 @@
+import os
+import io
 import pytest
-from io import BytesIO
-from server import app
+from fastapi.testclient import TestClient
+from moto import mock_aws
+import boto3
+
+# Mock out the environment before importing the server.py
+# Otherwise server.py will crash immediately looking for UPLOAD_BUCKET_NAME.
+os.environ["AWS_ACCESS_KEY_ID"] = "testing"
+os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
+os.environ["AWS_SECURITY_TOKEN"] = "testing"
+os.environ["AWS_SESSION_TOKEN"] = "testing"
+os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+os.environ["UPLOAD_BUCKET_NAME"] = "my-test-bucket"
 
 @pytest.fixture
 def client():
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+    from server import app
 
-def test_upload_no_file(client):
-    """Test that submitting an empty request returns a 400 error."""
-    response = client.post('/upload')
-    assert response.status_code == 400
-    assert b"No file part" in response.data
+    """Provides a fresh FastAPI TestClient for each test."""
+    with TestClient(app) as c:
+        yield c
 
-def test_upload_success(client, mocker):
-    """Test a successful file upload by mocking the external AWS S3 call."""
-    # Mock boto3's upload_fileobj so it doesn't actually connect to AWS during our test
-    mock_upload = mocker.patch('boto3.client')
-    
-    data = {
-        'file': (BytesIO(b"dummy file content"), 'test_document.txt')
-    }
-    
-    response = client.post('/upload', data=data, content_type='multipart/form-data')
+@pytest.fixture
+def mocked_s3():
+    """Fakes the entire S3 service environment locally in-memory."""
+    with mock_aws():
+        s3 = boto3.client("s3", region_name="us-east-1")
+        # Create bucket that the server will push files into
+        s3.create_bucket(Bucket="my-test-bucket")
+        yield s3
+
+# ============================================================
+# TESTS
+# ============================================================
+def test_health_endpoint(client):
+    """Tests that the /health route responds correctly."""
+    response = client.get("/health")
     assert response.status_code == 200
-    assert b"Successfully uploaded test_document.txt" in response.data
+    assert response.json() == {"status": "healthy"}
+
+
+def test_upload_file_success(client, mocked_s3):
+    """Tests a successful multi-part file upload to the S3 bucket."""
+    # Create fake file data in memory
+    file_name = "sample_document.pdf"
+    file_content = b"Fake PDF binary details here."
+
+    # Simulate a multi-part form file upload
+    files = {"file": (file_name, io.BytesIO(file_content), "application/pdf")}
+
+    # Execute the client POST request
+    response = client.post("/upload", files=files)
+
+    # Assert HTTP response codes and structures match your application rules
+    assert response.status_code == 200
+    assert response.json() == {"message": "Success", "filename": file_name}
+
+    # VERIFY THE CORE INFRASTRUCTURE: Reach into virtual in-memory S3 bucket
+    # to guarantee the file actually landed in the right directory key structure
+    s3_objects = mocked_s3.list_objects_v2(Bucket="my-test-bucket")
+    assert "Contents" in s3_objects
+    assert s3_objects["Contents"][0]["Key"] == f"uploads/{file_name}"
+
+
+def test_upload_file_s3_failure(client):
+    """Tests how your app handles internal server errors if S3 acts up."""
+    # By omitting the 'mocked_s3' fixture setup step here, the 'my-test-bucket'
+    # bucket does not exist inside Moto's universe.
+    # This forces boto3 to throw a NoSuchBucket exception when called.
+    with mock_aws():
+        file_name = "broken_upload.txt"
+        files = {"file": (file_name, io.BytesIO(b"Hello World"), "text/plain")}
+
+        response = client.post("/upload", files=files)
+
+        # Verify your app catches the exception and returns a structured 500 error
+        assert response.status_code == 500
+        assert "S3 storage error" in response.json()["detail"]

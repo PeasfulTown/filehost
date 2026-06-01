@@ -29,7 +29,7 @@ resource "aws_s3_bucket" "filehost_upload_bucket" {
 }
 
 # 3. Create IAM execution Role for the Lambda Function
-resource "aws_iam_role" "filehost_lambda_role" {
+resource "aws_iam_role" "filehost_extractor_lambda_role" {
   name = "metadata_extractor_lambda_role"
 
   assume_role_policy = jsonencode({
@@ -43,8 +43,8 @@ resource "aws_iam_role" "filehost_lambda_role" {
 }
 
 # Attach permissions to the Lambda role so it can read from S3 and write to DynamoDB
-resource "aws_iam_role_policy" "filehost_lambda_policy" {
-  role = aws_iam_role.filehost_lambda_role.id
+resource "aws_iam_role_policy" "filehost_extractor_lambda_policy" {
+  role = aws_iam_role.filehost_extractor_lambda_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -52,7 +52,7 @@ resource "aws_iam_role_policy" "filehost_lambda_policy" {
       {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:HeadObject"]
-        Resource = "${aws_s3_bucket.filehost_upload_bucket.arn}/*"
+        Resource = "${aws_s3_bucket.filehost_upload_bucket.arn}/uploads"
       },
       {
         Effect   = "Allow"
@@ -69,7 +69,7 @@ resource "aws_iam_role_policy" "filehost_lambda_policy" {
 }
 
 # 4. Automate zipping the Lambda python file before uploading
-data "archive_file" "lambda_zip" {
+data "archive_file" "filehost_extractor_lambda_zip" {
   type        = "zip"
   source_file = "${path.module}/../lambda/extractor.py"
   output_path = "${path.module}/../lambda/extractor.zip"
@@ -77,12 +77,12 @@ data "archive_file" "lambda_zip" {
 
 # 5. Create the Lambda Function itself
 resource "aws_lambda_function" "filehost_extractor_lambda" {
-  filename         = data.archive_file.lambda_zip.output_path
-  function_name    = "filehost_extractor_lambda"
-  role             = aws_iam_role.filehost_lambda_role.arn
+  filename         = data.archive_file.filehost_extractor_lambda_zip.output_path
+  function_name    = "filehost-extractor-lambda"
+  role             = aws_iam_role.filehost_extractor_lambda_role.arn
   handler          = "extractor.lambda_handler"
   runtime          = "python3.12"
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  source_code_hash = data.archive_file.filehost_extractor_lambda_zip.output_base64sha256
 
   environment {
     variables = {
@@ -110,4 +110,98 @@ resource "aws_s3_bucket_notification" "filehost_bucket_notification" {
   }
 
   depends_on = [aws_lambda_permission.filehost_allow_s3_invoke_lambda]
+}
+
+resource "aws_iam_role" "filehost_server_lambda_role" {
+  name = "filehost_server_lambda_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "filehost_server_lambda_policy" {
+  role = aws_iam_role.filehost_server_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.filehost_upload_bucket.arn}/uploads"
+      },
+      {
+        Effect = "Allow"
+        Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+data "archive_file" "filehost_server_lambda_zip" {
+  type = "zip"
+  source_file = "${path.module}/../app/server.py"
+  output_path = "${path.module}/../app/server.zip"
+}
+
+resource "aws_lambda_function" "filehost_server_lambda" {
+  filename = data.archive_file.filehost_server_lambda_zip.output_path
+  function_name = "filehost-server-lambda"
+  role = aws_iam_role.filehost_server_lambda_role.arn
+  handler = "server.handler"
+  runtime = "python3.12"
+  source_code_hash = data.archive_file.filehost_server_lambda_zip.output_base64sha256
+
+  environment {
+    variables = {
+      UPLOAD_BUCKET_NAME = aws_s3_bucket.filehost_upload_bucket.bucket
+    }
+  }
+}
+
+# ============================================================
+# API GATEWAY
+# ============================================================
+# Create HTTP API Gateway
+resource "aws_apigatewayv2_api" "filehost_api" {
+  name = "filehost-server-api"
+  protocol_type = "HTTP"
+}
+
+# Points API Gateway to existing Lambda function
+resource "aws_apigatewayv2_integration" "filehost_server_lambda_integration" {
+  api_id = aws_apigatewayv2_api.filehost_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri = aws_lambda_function.filehost_server_lambda.arn
+  payload_format_version = "2.0"
+}
+
+# Create catch all route ($default routes all paths and methods)
+resource "aws_apigatewayv2_route" "filehost_gateway" {
+  api_id = aws_apigatewayv2_api.filehost_api.id
+  route_key = "ANY /{proxy+}"
+  target = "integrations/${aws_apigatewayv2_integration.filehost_server_lambda_integration.id}"
+}
+
+# Deploy API to live Stage named '$default' (creates public URL)
+resource "aws_apigatewayv2_stage" "filehost_default_stage" {
+  api_id = aws_apigatewayv2_api.filehost_api.id
+  name = "$default"
+  auto_deploy = true
+}
+
+# Give API Gateway permission to invoke Lambda function
+resource "aws_lambda_permission" "filehost_apigateway_lambda_permission" {
+  statement_id = "AllowAPIGatewayInvoke"
+  action = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.filehost_server_lambda.function_name
+  principal = "apigateway.amazonaws.com"
+  source_arn = "${aws_apigatewayv2_api.filehost_api.execution_arn}/*/*"
 }
