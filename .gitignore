@@ -4,3 +4,5 @@
 **/*.zip
 **/*config.tfvars
 **/*__pycache__
+**/lambda_dist/
+**/lambda_deployment.zip
