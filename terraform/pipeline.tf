@@ -164,14 +164,6 @@ resource "aws_codepipeline" "pipeline" {
           includes = ["main"]
         }
       }
-    }
-  }
-
-  trigger {
-    provider_type = "CodeStarSourceConnection"
-
-    git_configuration {
-      source_action_name = "SourceAction"
 
       push {
         branches {
