@@ -2,28 +2,40 @@ version: 0.2
 
 phases:
   install:
-    commands:
-      - echo "Downloading official Terraform binary..."
+    runtime-versions:
+      python: 3.12
+    commands: |
+      echo "Packaging server files with dependencies..."
+      echo "Downloading official Terraform binary..."
       # Added -f (fail silently on server errors) and -L (follow redirects)
-      - curl -f -L -s -q https://releases.hashicorp.com/terraform/1.15.0/terraform_1.15.0_linux_amd64.zip -o /tmp/terraform.zip
+      curl -f -L -s -q https://releases.hashicorp.com/terraform/1.15.0/terraform_1.15.0_linux_amd64.zip -o /tmp/terraform.zip
 
-      - echo "Extracting binary..."
-      - unzip -o -q /tmp/terraform.zip -d /tmp/
+      echo "Extracting binary..."
+      unzip -o -q /tmp/terraform.zip -d /tmp/
 
-      - echo "Granting execution permission to terraform binary..."
-      - chmod +x /tmp/terraform
+      echo "Granting execution permission to terraform binary..."
+      chmod +x /tmp/terraform
 
-      - echo "Moving terraform binary to /usr/local/bin..."
-      - mv /tmp/terraform /usr/local/bin/
+      echo "Moving terraform binary to /usr/local/bin..."
+      mv /tmp/terraform /usr/local/bin/
 
-      - echo "Verifying installation..."
-      - terraform --version
+      echo "Verifying installation..."
+      terraform --version
+
+  pre_build:
+    commands: |
+      echo "Installing server dependencies into app/lambda_dist/ ..."
+      mkdir app/lambda_dist
+      pip3 install -r app/requirements.txt -t app/lambda_dist/
+
+      echo "Copying server.py to app/lambda_dist/ ..."
+      cp app/server.py app/lambda_dist/
 
   build:
-    commands:
-      - echo "Synchronizing infrastructure state..."
-      - echo "bucket = \"$BACKEND_BUCKET_NAME\"" > terraform/backend-config.tfvars
+    commands: |
+      echo "Synchronizing infrastructure state..."
+      echo "bucket = \"$BACKEND_BUCKET_NAME\"" > terraform/backend-config.tfvars
 
-      - cd terraform
-      - terraform init -input=false -backend-config=backend-config.tfvars
-      - terraform apply -auto-approve
+      cd terraform
+      terraform init -input=false -backend-config=backend-config.tfvars
+      terraform apply -auto-approve

@@ -153,33 +153,10 @@ resource "aws_iam_role_policy" "filehost_server_lambda_policy" {
   })
 }
 
-resource "null_resource" "filehost_build_lambda_package" {
-  triggers = {
-    # If requirements or server code changes, force rebuild
-    requirements = filemd5("${path.module}/../app/requirements.txt")
-    code         = filemd5("${path.module}/../app/server.py")
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-          # Create a temporary staging directory
-          mkdir -p ${path.module}/../app/lambda_dist
-
-          # Tell pip to install all dependencies directly into that directory
-          pip3 install -r ${path.module}/../app/requirements.txt -t ${path.module}/../app/lambda_dist/
-
-          # Copy your application code into the directory alongside the libraries
-          cp ${path.module}/../app/server.py ${path.module}/../app/lambda_dist/
-    EOT
-  }
-}
-
 data "archive_file" "filehost_server_lambda_zip" {
   type = "zip"
   source_dir = "${path.module}/../app/lambda_dist"
   output_path = "${path.module}/../app/lambda_deployment.zip"
-
-  depends_on = [null_resource.filehost_build_lambda_package]
 }
 
 resource "aws_lambda_function" "filehost_server_lambda" {
