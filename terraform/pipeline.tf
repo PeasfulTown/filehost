@@ -143,12 +143,45 @@ resource "aws_codepipeline" "pipeline" {
   name     = "python-infra-pipeline"
   role_arn = aws_iam_role.filehost_codepipeline_role.arn
 
+  pipeline_type = "V2"
+
   artifact_store {
     location = aws_s3_bucket.filehost_pipeline_bucket.bucket
     type     = "S3"
   }
 
-  # STAGE 1: Source (Assuming code is stored in S3 for simplicity, or can be linked to GitHub)
+  # Triggers on pull requests
+  trigger {
+    provider_type = "CodeStarSourceConnection"
+
+    git_configuration {
+      source_action_name = "SourceAction"
+
+      pull_request {
+        events = ["OPEN", "UPDATED"]
+
+        branches {
+          includes = ["main"]
+        }
+      }
+    }
+  }
+
+  trigger {
+    provider_type = "CodeStarSourceConnection"
+
+    git_configuration {
+      source_action_name = "SourceAction"
+
+      push {
+        branches {
+          includes = ["main"]
+        }
+      }
+    }
+  }
+
+  # STAGE 1: Source (linked to GitHub repository)
   stage {
     name = "Source"
 
@@ -190,6 +223,28 @@ resource "aws_codepipeline" "pipeline" {
   # STAGE 3: CD (Terraform Apply)
   stage {
     name = "Deploy"
+
+    # Don't run the deploy stage if pipeline was triggered by Pull Request event
+    before_entry {
+      condition {
+        result = "SKIP"
+        rule {
+          name = "SkipOnPullRequest"
+          rule_type_id {
+            category = "Rule"
+            provider = "VariableCheck"
+            owner = "AWS"
+            version = "1"
+          }
+          configuration = {
+            Variable = "#{SourceVariables.PullRequestId}"
+            Value = "[0-9]+"
+            Operator = "MATCHES"
+          }
+        }
+      }
+
+    }
 
     action {
       name            = "TerraformApply"
