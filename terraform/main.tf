@@ -107,6 +107,8 @@ resource "aws_s3_bucket_notification" "filehost_bucket_notification" {
   lambda_function {
     lambda_function_arn = aws_lambda_function.filehost_extractor_lambda.arn
     events              = ["s3:ObjectCreated:*"]
+
+    filter_prefix = "uploads/"
   }
 
   depends_on = [aws_lambda_permission.filehost_allow_s3_invoke_lambda]
