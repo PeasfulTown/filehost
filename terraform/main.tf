@@ -9,11 +9,6 @@ resource "aws_dynamodb_table" "filehost_metadata_table" {
     type = "S"
   }
 
-  attribute {
-    name = "FileName"
-    type = "S"
-  }
-
   # Block for financial protection: Circuit breaker which will throttle table if
   # an infinite loop tries to spike the requests
   on_demand_throughput {
