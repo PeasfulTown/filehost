@@ -29,8 +29,3 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 handler = Mangum(app, lifespan="off")
-
-if __name__ == "__main__":
-    import uvicorn
-    print("Starting local development server...")
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)

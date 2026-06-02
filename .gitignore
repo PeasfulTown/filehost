@@ -1,5 +1,6 @@
 **/*.venv
 **/*.terraform
+**/terraform.tfstate
 **/*.terraform.lock.hcl
 **/*.zip
 **/*config.tfvars
