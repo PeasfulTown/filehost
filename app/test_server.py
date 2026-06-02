@@ -13,6 +13,7 @@ os.environ["AWS_SECURITY_TOKEN"] = "testing"
 os.environ["AWS_SESSION_TOKEN"] = "testing"
 os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 os.environ["UPLOAD_BUCKET_NAME"] = "my-test-bucket"
+os.environ["METADATA_TABLE_NAME"] = "metadata-table"
 
 @pytest.fixture
 def client():
@@ -30,6 +31,22 @@ def mocked_s3():
         # Create bucket that the server will push files into
         s3.create_bucket(Bucket="my-test-bucket")
         yield s3
+
+@pytest.fixture
+def mocked_dynamodb():
+    with mock_aws():
+        dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+        dynamodb.create_table(
+                TableName="metadata-table",
+                KeySchema=[
+                    {"AttributeName": "FileId", "KeyType": "HASH"}
+                ],
+                AttributeDefinitions=[
+                    {"AttributeName": "FileId", "AttributeType": "S"}
+                ],
+                BillingMode="PAY_PER_REQUEST"
+        )
+        yield dynamodb
 
 # ============================================================
 # TESTS
@@ -80,3 +97,56 @@ def test_upload_file_s3_failure(client):
         # Verify your app catches the exception and returns a structured 500 error
         assert response.status_code == 500
         assert "S3 storage error" in response.json()["detail"]
+
+def test_get_file_information_success(client, mocked_dynamodb):
+    """
+    Tests that retrieving an existing file information returns correct
+    information
+    """
+    table = mocked_dynamodb.Table("metadata-table")
+    test_id = "01H2V6A5X5Y6Z7W8V9U0T1S2R3"
+
+    table.put_item(
+            Item={
+                "FileId": test_id,
+                "FileName": "uploads/another-test.txt",
+                "FileSizeInBytes": 123,
+                "ContentType": "text/plain",
+                "UploadedOn": "2026-06-02T05:25:50+00:00"
+            }
+        )
+
+    # 2. Execute the GET request via the FastAPI TestClient
+    response = client.get(f"/files/{test_id}/info")
+
+    # 3. Assertions
+    assert response.status_code == 200
+    data = response.json()
+    assert data["FileId"] == test_id
+    assert data["ContentType"] == "text/plain"
+    assert data["FileSizeInBytes"] == 123
+
+def test_get_file_information_not_found(client, mocked_dynamodb):
+    """
+    Tests that looking up a FileId that does not exist safely returns
+    a 404 error instead of crashing.
+    """
+    # We pass the fixture so the table exists, but we don't put any items in it
+    response = client.get("/files/non-existent-id-123/info")
+
+    assert response.status_code == 404
+    assert "does not exist" in response.json()["detail"]
+
+
+def test_get_file_information_table_missing(client):
+    """
+    Tests that if the underlying database table breaks or doesn't exist,
+    the endpoint catches the system crash and handles it with a 500 error.
+    """
+    # By running this test WITHOUT the mocked_dynamodb fixture, Moto's system
+    # has no table named "metadata-table". This forces boto3 to throw a
+    # ResourceNotFoundException, testing your server's global try/except block.
+    response = client.get("/files/any-id-here/info")
+
+    assert response.status_code == 500
+    assert "An internal server error occurred" in response.json()["detail"]

@@ -7,8 +7,10 @@ from mangum import Mangum
 app = FastAPI(title="FileHost Controller")
 
 s3_client = boto3.client("s3")
+dynamodb = boto3.resource("dynamodb")
 BUCKET_NAME: str = os.environ["UPLOAD_BUCKET_NAME"]
-
+TABLE_NAME: str = os.environ["METADATA_TABLE_NAME"]
+table = dynamodb.Table(TABLE_NAME)
 
 @app.get("/health")
 def check_health():
@@ -31,5 +33,28 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"S3 storage error: {str(e)}")
 
+@app.get("/files/{file_id}/info")
+def get_file_information(file_id: str):
+    """
+    Retrieves metadata for a specific file based on its unique FileId
+    """
+    try:
+        response = table.get_item(Key={"FileId": file_id})
+        item = response.get("Item")
+        if not item:
+            raise HTTPException(
+                    status_code=404,
+                    detail=f"File with ID '{file_id}' does not exist."
+                    )
+
+        return item
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Database error while fetching FileId {file_id}: {str(e)}")
+        raise HTTPException(
+                status_code=500,
+                detail="An internal server error occurred while retrieving file information."
+                )
 
 handler = Mangum(app, lifespan="off")

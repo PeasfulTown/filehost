@@ -146,6 +146,11 @@ resource "aws_iam_role_policy" "filehost_server_lambda_policy" {
       },
       {
         Effect = "Allow"
+        Action = ["dynamodb:GetItem"]
+        Resource = "${aws_dynamodb_table.filehost_metadata_table.arn}"
+      },
+      {
+        Effect = "Allow"
         Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:*:*:*"
       }
@@ -170,6 +175,7 @@ resource "aws_lambda_function" "filehost_server_lambda" {
   environment {
     variables = {
       UPLOAD_BUCKET_NAME = aws_s3_bucket.filehost_upload_bucket.bucket
+      METADATA_TABLE_NAME = aws_dynamodb_table.filehost_metadata_table.name
     }
   }
 }
