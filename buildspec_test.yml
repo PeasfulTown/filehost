@@ -7,6 +7,7 @@ phases:
     commands:
       - echo "Installing Python dependencies..."
       - pip install -r app/requirements.txt
+      - pip install pytest moto
     build:
       commands:
         - echo "Running unit tests..."

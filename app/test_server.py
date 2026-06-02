@@ -61,7 +61,9 @@ def test_upload_file_success(client, mocked_s3):
     # to guarantee the file actually landed in the right directory key structure
     s3_objects = mocked_s3.list_objects_v2(Bucket="my-test-bucket")
     assert "Contents" in s3_objects
-    assert s3_objects["Contents"][0]["Key"] == f"uploads/{file_name}"
+
+    s3_object_filename = s3_objects["Contents"][0]["Key"].split('/')[-1]
+    assert s3_object_filename == file_name
 
 
 def test_upload_file_s3_failure(client):

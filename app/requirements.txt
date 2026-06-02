@@ -2,3 +2,4 @@ boto3 ~= 1.43.00
 botocore ~= 1.43.00
 fastapi[standard] ~= 0.136.0
 mangum ~= 0.21.0
+ulid-py ~= 1.1

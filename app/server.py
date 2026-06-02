@@ -1,5 +1,6 @@
 import os
 import boto3
+import ulid
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from mangum import Mangum
 
@@ -18,10 +19,13 @@ def check_health():
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
+        new_file_id = ulid.new()
         contents = await file.read()
 
         s3_client.put_object(
-            Bucket=BUCKET_NAME, Key=f"uploads/{file.filename}", Body=contents
+            Bucket=BUCKET_NAME,
+            Key=f"uploads/{new_file_id}/{file.filename}",
+            Body=contents
         )
         return {"message": "Success", "filename": file.filename}
     except Exception as e:

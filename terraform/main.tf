@@ -2,7 +2,12 @@
 resource "aws_dynamodb_table" "filehost_metadata_table" {
   name         = "FileMetadata"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "FileName"
+  hash_key     = "FileId"
+
+  attribute {
+    name = "FileId"
+    type = "S"
+  }
 
   attribute {
     name = "FileName"
