@@ -28,6 +28,28 @@ resource "aws_s3_bucket" "filehost_upload_bucket" {
   force_destroy    = true
 }
 
+resource "aws_s3_bucket_policy" "filehost_s3_allow_cloudfront_policy" {
+  bucket = aws_s3_bucket.filehost_upload_bucket.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sidebar = "AllowCloudFrontPrivateOACReading"
+        Effect    = "Allow"
+        Principal = { Service = "cloudfront.amazonaws.com" }
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.filehost_upload_bucket.arn}/uploads/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.filehost_cloudfront.arn
+          }
+        }
+      }
+    ]
+  })
+}
+
 # ============================================================
 # METADATA EXTRACTOR LAMBDA
 # ============================================================
@@ -176,6 +198,7 @@ resource "aws_lambda_function" "filehost_server_lambda" {
     variables = {
       UPLOAD_BUCKET_NAME = aws_s3_bucket.filehost_upload_bucket.bucket
       METADATA_TABLE_NAME = aws_dynamodb_table.filehost_metadata_table.name
+      CLOUDFRONT_CDN_URL = aws_cloudfront_distribution.filehost_cloudfront.domain_name
     }
   }
 }
@@ -218,4 +241,103 @@ resource "aws_lambda_permission" "filehost_apigateway_lambda_permission" {
   function_name = aws_lambda_function.filehost_server_lambda.function_name
   principal = "apigateway.amazonaws.com"
   source_arn = "${aws_apigatewayv2_api.filehost_api.execution_arn}/*/*"
+}
+
+# ============================================================
+# CLOUDFRONT
+# ============================================================
+resource "aws_cloudfront_origin_access_control" "filehost_s3_cloudfront_oac" {
+  name                              = "filehost-s3-cloudfront-oac"
+  description                       = "Allows CloudFront to securely access S3 assets"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_cloudfront_distribution" "filehost_cloudfront" {
+  enabled = true
+  is_ipv6_enabled = true
+  comment = "FileHost CDN"
+  price_class = "PriceClass_100"
+
+  origin {
+    domain_name = aws_s3_bucket.filehost_upload_bucket.bucket_regional_domain_name
+    origin_id                = "filehost-s3-upload-bucket"
+    origin_access_control_id = aws_cloudfront_origin_access_control.filehost_s3_cloudfront_oac.id
+  }
+
+  origin {
+    # Extract the domain name from API Gateway URL (stripping https:// and stage paths)
+    domain_name = replace(aws_apigatewayv2_stage.filehost_default_stage.invoke_url, "/^https:\\/\\/|\\/.*$/", "")
+    origin_id   = "filehost-server-api"
+
+    custom_origin_config {
+      http_port                = 80
+      https_port               = 443
+      origin_protocol_policy   = "https-only"
+      origin_ssl_protocols     = ["TLSv1.2"]
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern           = "/files/*/info"
+    target_origin_id       = "filehost-server-api"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    viewer_protocol_policy = "redirect-to-https"
+
+    # AWS Managed Policies: Disable caching, pass auth headers/tokens to FastAPI
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
+    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # Managed-AllViewerExceptHostRequestPolicy
+  }
+
+  ordered_cache_behavior {
+    path_pattern           = "/files/*"
+    target_origin_id       = "filehost-s3-upload-bucket"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    viewer_protocol_policy = "redirect-to-https"
+
+    # AWS Managed Policy: Highly optimized edge caching for media assets
+    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
+
+    function_association {
+      event_type = "viewer-request"
+      function_arn = aws_cloudfront_function.filehost_cloudfront_path_rewrite.arn
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "filehost-server-api"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    viewer_protocol_policy = "redirect-to-https"
+
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
+    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # Managed-AllViewerExceptHostRequestPolicy
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+
+resource "aws_cloudfront_function" "filehost_cloudfront_path_rewrite" {
+  name    = "filehost-url-path-rewriter"
+  runtime = "cloudfront-js-2.0"
+  comment = "Changes public /files/ prefix to internal /uploads/ prefix for S3"
+  code    = <<-EOF
+            function handler(event) {
+                var request = event.request;
+                // If the request is for /files/image.png, change it to /uploads/image.png
+                request.uri = request.uri.replace(/^\/files\//, '/uploads/');
+                return request;
+            }
+            EOF
 }

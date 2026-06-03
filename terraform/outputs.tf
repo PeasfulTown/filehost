@@ -15,5 +15,10 @@ output "codeconnections_connection_arn" {
 
 output "apigateway_url" {
   value = aws_apigatewayv2_stage.filehost_default_stage.invoke_url
+  description = "API Gateway URL"
+}
+
+output "cloudfront_url" {
+  value = aws_cloudfront_distribution.filehost_cloudfront.domain_name
   description = "Live public HTTP URL of the application"
 }
