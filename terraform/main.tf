@@ -141,7 +141,7 @@ resource "aws_iam_role_policy" "filehost_server_lambda_policy" {
     Statement = [
       {
         Effect = "Allow"
-        Action = ["s3:PutObject"]
+        Action = ["s3:PutObject", "s3:GetObject"]
         Resource = "${aws_s3_bucket.filehost_upload_bucket.arn}/uploads/*"
       },
       {

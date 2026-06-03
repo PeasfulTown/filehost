@@ -2,7 +2,9 @@ import os
 import boto3
 import ulid
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from mangum import Mangum
+from mimetypes import guess_type
 
 app = FastAPI(title="FileHost Controller")
 
@@ -31,11 +33,14 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
 
         new_ulid = ulid.new()
         saved_filename = f"{new_ulid}.{file.filename.split('.')[-1]}"
+        guessed_type, _ = guess_type(saved_filename)
+        content_type = guessed_type if guessed_type else "binary/octet-stream"
 
         s3_client.put_object(
             Bucket=BUCKET_NAME,
             Key=f"uploads/{saved_filename}",
-            Body=contents
+            Body=contents,
+            ContentType=content_type
         )
 
         file_url = f"{str(request.base_url)}files/{saved_filename}"
@@ -45,6 +50,39 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"S3 storage error: {str(e)}")
+
+@app.get("/files/{file_name}")
+def get_file(file_name: str):
+    """
+    Looks up file's metadata and routes the client to the S3 assert
+    """
+    try:
+        db_response = table.get_item(Key={"FileName": file_name})
+        item = db_response.get("Item")
+
+        if not item:
+            raise HTTPException(
+                    status_code=404,
+                    detail=f"{file_name} not found"
+            )
+
+        presigned_url = s3_client.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": BUCKET_NAME,
+                    "Key": f"uploads/{file_name}",
+                    "ResponseContentDisposition": f"inline; filename=\"{file_name}\""
+                    },
+                ExpiresIn=900
+                )
+
+        return RedirectResponse(url=presigned_url, status_code=307)
+
+    except HTTPException as e:
+        return e
+    except Exception as e:
+        print(f"Error resolving download for {file_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal file processing error")
 
 @app.get("/files/{file_name}/info")
 def get_file_information(file_name: str):
