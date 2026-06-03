@@ -39,10 +39,10 @@ def mocked_dynamodb():
         dynamodb.create_table(
                 TableName="metadata-table",
                 KeySchema=[
-                    {"AttributeName": "FileId", "KeyType": "HASH"}
+                    {"AttributeName": "FileName", "KeyType": "HASH"}
                 ],
                 AttributeDefinitions=[
-                    {"AttributeName": "FileId", "AttributeType": "S"}
+                    {"AttributeName": "FileName", "AttributeType": "S"}
                 ],
                 BillingMode="PAY_PER_REQUEST"
         )
@@ -72,7 +72,16 @@ def test_upload_file_success(client, mocked_s3):
 
     # Assert HTTP response codes and structures match your application rules
     assert response.status_code == 200
-    assert response.json() == {"message": "Success", "filename": file_name}
+
+    data = response.json()
+    assert data["message"] == "Success"
+
+    generated_file_name = data["url"].split('/')[-1]
+    generated_file_ulid = generated_file_name.split('.')[0]
+
+    assert len(generated_file_ulid) == 26
+
+    assert data["url"].endswith(f"/files/{generated_file_ulid}.pdf")
 
     # VERIFY THE CORE INFRASTRUCTURE: Reach into virtual in-memory S3 bucket
     # to guarantee the file actually landed in the right directory key structure
@@ -80,7 +89,7 @@ def test_upload_file_success(client, mocked_s3):
     assert "Contents" in s3_objects
 
     s3_object_filename = s3_objects["Contents"][0]["Key"].split('/')[-1]
-    assert s3_object_filename == file_name
+    assert s3_object_filename == generated_file_name
 
 
 def test_upload_file_s3_failure(client):
@@ -105,11 +114,11 @@ def test_get_file_information_success(client, mocked_dynamodb):
     """
     table = mocked_dynamodb.Table("metadata-table")
     test_id = "01H2V6A5X5Y6Z7W8V9U0T1S2R3"
+    file_name = f"{test_id}.txt"
 
     table.put_item(
             Item={
-                "FileId": test_id,
-                "FileName": "uploads/another-test.txt",
+                "FileName": f"{test_id}.txt",
                 "FileSizeInBytes": 123,
                 "ContentType": "text/plain",
                 "UploadedOn": "2026-06-02T05:25:50+00:00"
@@ -117,18 +126,18 @@ def test_get_file_information_success(client, mocked_dynamodb):
         )
 
     # 2. Execute the GET request via the FastAPI TestClient
-    response = client.get(f"/files/{test_id}/info")
+    response = client.get(f"/files/{file_name}/info")
 
     # 3. Assertions
     assert response.status_code == 200
     data = response.json()
-    assert data["FileId"] == test_id
+    assert data["FileName"] == file_name
     assert data["ContentType"] == "text/plain"
     assert data["FileSizeInBytes"] == 123
 
 def test_get_file_information_not_found(client, mocked_dynamodb):
     """
-    Tests that looking up a FileId that does not exist safely returns
+    Tests that looking up a FileName that does not exist safely returns
     a 404 error instead of crashing.
     """
     # We pass the fixture so the table exists, but we don't put any items in it

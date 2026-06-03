@@ -31,8 +31,7 @@ def lambda_handler(event, context):
         s3_last_modified = response["LastModified"].isoformat()
 
         metadata = {
-            "FileId": key.split('/')[-2],
-            "FileName": os.path.basename(key),
+            "FileName": key.split('/')[-1],
             "UploadedOn": s3_last_modified,
             "FileSizeInBytes": response["ContentLength"],
             "ContentType": content_type,
