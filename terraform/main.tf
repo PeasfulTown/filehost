@@ -35,7 +35,6 @@ resource "aws_s3_bucket_policy" "filehost_s3_allow_cloudfront_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sidebar = "AllowCloudFrontPrivateOACReading"
         Effect    = "Allow"
         Principal = { Service = "cloudfront.amazonaws.com" }
         Action    = "s3:GetObject"
