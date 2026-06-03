@@ -197,7 +197,7 @@ resource "aws_lambda_function" "filehost_server_lambda" {
     variables = {
       UPLOAD_BUCKET_NAME = aws_s3_bucket.filehost_upload_bucket.bucket
       METADATA_TABLE_NAME = aws_dynamodb_table.filehost_metadata_table.name
-      CLOUDFRONT_CDN_URL = "https://{aws_cloudfront_distribution.filehost_cloudfront.domain_name}"
+      CLOUDFRONT_CDN_URL = "https://${aws_cloudfront_distribution.filehost_cloudfront.domain_name}"
     }
   }
 }
