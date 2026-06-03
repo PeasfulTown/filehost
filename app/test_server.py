@@ -14,6 +14,7 @@ os.environ["AWS_SESSION_TOKEN"] = "testing"
 os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 os.environ["UPLOAD_BUCKET_NAME"] = "my-test-bucket"
 os.environ["METADATA_TABLE_NAME"] = "metadata-table"
+os.environ["CLOUDFRONT_CDN_URL"] = "https://cloudfront.url"
 
 @pytest.fixture
 def client():

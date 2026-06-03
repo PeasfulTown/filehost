@@ -13,6 +13,7 @@ dynamodb = boto3.resource("dynamodb")
 BUCKET_NAME: str = os.environ["UPLOAD_BUCKET_NAME"]
 TABLE_NAME: str = os.environ["METADATA_TABLE_NAME"]
 table = dynamodb.Table(TABLE_NAME)
+CLOUDFRONT_CDN_URL: str = os.environ["CLOUDFRONT_CDN_URL"]
 
 @app.get("/health")
 def check_health():
@@ -43,7 +44,7 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
             ContentType=content_type
         )
 
-        file_url = f"{str(request.base_url)}files/{saved_filename}"
+        file_url = f"{CLOUDFRONT_CDN_URL}/files/{saved_filename}"
 
         return {"message": "Success", "url": file_url}
     except HTTPException as e:
