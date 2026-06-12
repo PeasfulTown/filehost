@@ -16,8 +16,8 @@ Prerequisites:
 1. Clone the repository and go into terraform directory:
 
 ```bash
-git clone git@github.com:PeasfulTown/fileshare
-cd fileshare/terraform
+git clone git@github.com:PeasfulTown/filehost
+cd filehost/terraform
 ```
 
 2. Use terraform to provision:
@@ -33,6 +33,15 @@ Review the plan and type `yes` to start provisioning.
 ```bash
 curl -X POST "https://$(terraform output -raw cloudfront_url)/upload" \
     -F "file=@/path/to/file/testfile.txt"
+```
+
+Output should be:
+
+```json
+{
+    "message": "Success",
+    "url": "https://123abc.cloudfront.net/files/efg456.txt"
+}
 ```
 
 # System Architecture
@@ -84,3 +93,8 @@ Response (`200 OK`):
     "ContentType": "image/png"
 ```
 
+# TODO
+
+- [ ] Implement file expiry period
+- [ ] Setup EventBridge scheduled event to clean up expired files
+- [ ] Detect extra metadata based on filetype
